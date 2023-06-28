@@ -39,169 +39,52 @@ jobs:
       matrix:
         # Tests [amd64]
         #
-        os: [ubuntu-latest, macos-latest, windows-2019]
-        python-version:
-          - "2.7"
-          - "3.6"
-          - "3.7"
-          - "3.8"
-          - "3.9"
-          - "3.10"  # quotes to avoid being interpreted as the number 3.1
-          - "3.11"
-          - "3.12-dev"
-        env: [{ STATIC_DEPS: true }, { STATIC_DEPS: false }]
-
-        include:
-          #- os: windows-2016
-          #  python-version: 2.7
-          #  env: { STATIC_DEPS: true }  # always static
-
-          - python-version: "3.12-dev"
-            allowed_failure: true
-
-          - os: ubuntu-latest
-            python-version: "3.9"
-            env: {STATIC_DEPS: true, WITH_REFNANNY: true}
-            extra_hash: "-refnanny"
-            allowed_failure: true
-          - os: ubuntu-latest
-            python-version: "3.11"
-            env: {STATIC_DEPS: true, WITH_REFNANNY: true}
-            extra_hash: "-refnanny"
-            allowed_failure: true
-          # Coverage setup
-          - os: ubuntu-latest
-            python-version: "3.9"
-            env: { COVERAGE: true }
-            extra_hash: "-coverage"
-            allowed_failure: true   # shouldn't fail but currently does...
-          - os: ubuntu-latest
-            python-version: "3.9"
-            env: { STATIC_DEPS: false, EXTRA_DEPS: "docutils pygments sphinx sphinx-rtd-theme" }
-            extra_hash: "-docs"
-            allowed_failure: true   # shouldn't fail but currently does...
-          # Old library setup with minimum version requirements
-          - os: ubuntu-latest
-            python-version: "3.9"
-            env: {
-              STATIC_DEPS: true,
-              LIBXML2_VERSION: 2.9.2,
-              LIBXSLT_VERSION: 1.1.27,
-            }
-            extra_hash: "-oldlibs"
-            allowed_failure: true   # shouldn't fail but currently does...
-          # Ubuntu sub-jobs:
-          # ================
-          # Pypy
-          - os: ubuntu-latest
-            python-version: pypy-2.7
-            env: { STATIC_DEPS: false }
-            allowed_failure: true
-          - os: ubuntu-latest
-            python-version: pypy-3.7
-            env: { STATIC_DEPS: false }
-            allowed_failure: true
-          - os: ubuntu-latest
-            python-version: pypy-3.8
-            env: { STATIC_DEPS: false }
-            allowed_failure: true
-
-          # MacOS sub-jobs
-          # ==============
-          #- os: macos-latest
-          #  allowed_failure: true   # Unicode parsing fails in Py3
-
-        exclude:
-          - os: ubuntu-latest
-            python-version: "3.6"
-
-          # Windows sub-jobs
-          # ==============
-          - os: windows-2019
-            python-version: 2.7  # needs older image
-          - os: windows-2019
-            env: { STATIC_DEPS: false }  # always static
-
-    # This defaults to 360 minutes (6h) which is way too long and if a test gets stuck, it can block other pipelines.
-    # From testing, the runs tend to take 3-8 minutes, so a limit of 30 minutes should be enough.
-    timeout-minutes: 30
+        os: [ubuntu-latest]
+        env:
+          - BOOLEAN: true
+            ALWAYS: 'blah'
+            SOMETIMES: 'bar'
+          - BOOLEAN: false
+            ALWAYS: 'blah'
+        env2: [{ STYLE: 'flow', BOOLEAN: true, ALWAYS: 'blah' }]
     runs-on: ${{ matrix.os }}
-
-    env:
-      OS_NAME: ${{ matrix.os }}
-      PYTHON_VERSION: ${{ matrix.python-version }}
-      MACOSX_DEPLOYMENT_TARGET: 11.0
-      LIBXML2_VERSION: 2.10.4
-      LIBXSLT_VERSION: 1.1.38
-      COVERAGE: false
-      GCC_VERSION: 9
-      USE_CCACHE: 1
-      CCACHE_SLOPPINESS: "pch_defines,time_macros"
-      CCACHE_COMPRESS: 1
-      CCACHE_MAXSIZE: "100M"
+    continue-on-error: true
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install MacOS dependencies
-        if: startsWith(runner.os, 'mac')
+      - name: debug ${{ toJson(matrix.env) }}
         run: |
-          brew install automake libtool ccache
-          ln -s /usr/local/bin/glibtoolize /usr/local/bin/libtoolize
+          echo '${{ toJson(matrix.env) }}'
+          echo '${{ matrix.env }}'
+          echo '${{ toJson(matrix.env.ALWAYS) }}'
+          echo '${{ toJson(matrix.env.BOOLEAN) }}'
+          echo '${{ toJson(matrix.env.SOMETIMES) }}'
+          echo '${{ toJson(matrix.env2) }}'
+          echo '${{ matrix.env2 }}'
 
-      - name: Cache [ccache]
-        uses: pat-s/always-upload-cache@v3.0.11
-        if: startsWith(runner.os, 'Linux') || startsWith(runner.os, 'mac')
-        with:
-          path: ~/.ccache
-          key: ${{ runner.os }}-ccache${{ matrix.extra_hash }}-${{ matrix.python-version }}-${{ hashFiles('.github/workflows/ci.yml', 'tools/ci-run.sh') }}
-
-      - name: Cache [libs]
-        uses: actions/cache@v3
-        if: ${{ matrix.env.STATIC_DEPS == 'true' }}
-        with:
-          path: |
-            libs/*.xz
-            libs/*.gz
-            libs/*.zip
-          key: libs-${{ runner.os }}-${{ env.LIBXML2_VERSION }}-${{ env.LIBXSLT_VERSION }}${{ matrix.extra_hash }}
-
-      - name: Run CI
-        continue-on-error: ${{ matrix.allowed_failure || false }}
+      - name: ENV
         env: ${{ matrix.env }}
-        run: bash -c 'GITHUB_API_TOKEN="${{ secrets.GITHUB_TOKEN }}"  bash ./tools/ci-run.sh'
-
-      - name: Build docs
-        if: contains( matrix.env.EXTRA_DEPS, 'sphinx')
-        run: make html
-
-      - name: Upload docs
-        uses: actions/upload-artifact@v3
-        if: ${{ matrix.extra_hash == '-docs' }}
-        with:
-          name: website_html
-          path: doc/html
-          if-no-files-found: ignore
-
-      - name: Upload Coverage Report
-        uses: actions/upload-artifact@v3
-        with:
-          name: pycoverage_html
-          path: coverage*
-          if-no-files-found: ignore
-
-      - name: Upload Wheel
-        uses: actions/upload-artifact@v3
-        if: ${{ matrix.env.STATIC_DEPS == 'true' }}
-        with:
-          name: wheels-${{ runner.os }}
-          path: dist/*.whl
-          if-no-files-found: ignore
+        run: env
+      - name: iftest1
+        if: matrix.env.BOOLEAN
+        run: echo ''
+      - name: iftest2
+        if: ${{ matrix.env.BOOLEAN }}
+        run: echo ''
+      - name: iftest6
+        if: ${{ matrix.env.BOOLEAN == 'true' }}
+        run: echo ''
+      - name: iftest7
+        if: ${{ matrix.env.BOOLEAN == 'true' }}
+        run: echo ''
+      - name: if true
+        if: true
+        run: echo
+      - name: if string true
+        if: 'true'
+        run: echo
+      - name: if false
+        if: false
+        run: echo
+      - name: if string false
+        if: 'false'
+        run: echo
