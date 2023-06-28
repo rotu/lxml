@@ -88,3 +88,33 @@ jobs:
       - name: if string false
         if: 'false'
         run: echo
+      - name: if zero
+        if: 0
+        run: echo
+      - name: if one
+        if: 1
+        run: echo
+      - name: if string empty
+        if: ''
+        run: echo
+      - name: if string zero
+        if: '0'
+        run: echo
+      - name: if string one
+        if: '1'
+        run: echo
+      - name: true eq 1
+        if: ${{ true == 1 }}
+        run: echo
+      - name: 1 eq true
+        if: ${{ 1 == true }}
+        run: echo
+      - name: string true eq 1
+        if: ${{ 'true' == 1 }}
+        run: echo
+      - name: true eq string true
+        if: ${{ true == 'true' }}
+        run: echo
+      - name: string true eq true
+        if: ${{ 'true' == true }}
+        run: echo
